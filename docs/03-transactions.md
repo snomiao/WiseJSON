@@ -1,82 +1,81 @@
-```markdown
-# 03 - Работа с Транзакциями
+# 03 - Working with Transactions
 
-Транзакции в WiseJSON DB позволяют сгруппировать несколько операций записи (таких как вставка, обновление, удаление) в одну атомарную единицу. Это гарантирует, что либо все операции в транзакции успешно выполняются и их изменения сохраняются, либо, если на любом этапе до фиксации (commit) возникает ошибка, ни одна из операций не применяется, и база данных остается в состоянии, предшествующем началу транзакции.
+Transactions in WiseJSON DB allow you to group multiple write operations (such as inserts, updates, and deletes) into a single atomic unit. This ensures that either all operations in a transaction are successfully executed and their changes are saved, or, if an error occurs at any stage before commit, none of the operations are applied, and the database remains in the state before the transaction began.
 
-Транзакции обеспечивают **консистентность данных** при выполнении сложных, многошаговых изменений и могут затрагивать одну или несколько коллекций в рамках одного экземпляра базы данных.
+Transactions ensure data consistency when performing complex, multi-step changes and can affect one or more collections within a single database instance.
 
-**Предполагается, что у вас уже есть инициализированный экземпляр `WiseJSON` (переменная `db`), как описано в разделе `00-introduction-and-setup.md`.**
+**This section assumes you already have an initialized WiseJSON instance (the db variable), as described in section 00-introduction-and-setup.md.**
 
-## Когда использовать транзакции?
+## When to Use Transactions?
 
-Транзакции незаменимы в следующих случаях:
+Transactions are indispensable in the following cases:
 
-*   **Атомарность нескольких операций**: Когда вам нужно, чтобы несколько связанных изменений данных произошли по принципу "все или ничего". Классический пример — перевод средств со счета на счет: списание с одного счета и зачисление на другой должны либо оба выполниться, либо оба отмениться.
-*   **Согласованность данных при сложных изменениях**: Если вы обновляете несколько логически связанных документов (возможно, в разных коллекциях), транзакция предотвратит состояние, когда часть данных обновлена, а часть — нет, из-за ошибки в середине процесса.
-*   **Изоляция**: Операции внутри транзакции не видны другим частям приложения до момента вызова `commit()`. Это обеспечивает базовый уровень изоляции и предотвращает чтение "грязных" или неполных данных.
+- **Atomicity of Multiple Operations**: When you need multiple related data changes to occur on an all-or-nothing basis. A classic example is transferring funds between accounts: a debit from one account and a credit to another must either both occur, or both must be reversed.
+- **Data Consistency During Complex Updates**: If you're updating multiple logically related documents (possibly in different collections), a transaction will prevent a situation where some data is updated and some is not, due to an error mid-process.
+- **Isolation**: Operations within a transaction are not visible to other parts of the application until the commit() call. This provides a basic level of isolation and prevents reading "dirty" or incomplete data.
 
-## Как работать с транзакциями
+## How to Work with Transactions
 
-Процесс работы с транзакциями включает четыре основных шага:
+Working with transactions involves four main steps:
 
-### Шаг 1: Начало транзакции
+### Step 1: Beginning a Transaction
 
-Чтобы начать транзакцию, вызовите метод `db.beginTransaction()`. Этот метод возвращает объект транзакции (`txn`), через который вы будете выполнять все последующие операции.
+To begin a transaction, call the `db.beginTransaction()` method. This method returns a transaction object (TransactionManager), through which you will perform all subsequent operations.
 
 ```javascript
 const txn = db.beginTransaction();
 ```
 
-### Шаг 2: Получение транзакционных коллекций
+### Step 2: Obtaining Transactional Collections
 
-Для выполнения операций внутри транзакции вы должны получить "транзакционную" версию коллекции через объект транзакции, используя метод `txn.collection('collectionName')`.
+To perform operations within a transaction, you must obtain the "transactional" version of the collection through the transaction object using the `txn.collection('collectionName')` method.
 
-*   **Важно:** Для транзакционных коллекций **НЕ нужно** вызывать `initPromise`. Предполагается, что "родительские" коллекции уже были инициализированы при запуске приложения (например, `await db.collection('users').initPromise`).
+- **Important:** For transactional collections, you **DO NOT** need to call `initPromise`. It is assumed that the "parent" collections have already been initialized at application startup (e.g., `await db.collection('users').initPromise`).
 
 ```javascript
-// Получаем обертки для коллекций, которые будут участвовать в транзакции
+// Obtain wrappers for the collections that will participate in the transaction
 const usersTxn = txn.collection('users');
 const logsTxn = txn.collection('logs');
 ```
 
-### Шаг 3: Выполнение операций
+### Step 3: Executing Operations
 
-Теперь вы можете вызывать методы записи (`insert`, `insertMany`, `update`, `remove`, `clear`) на этих транзакционных коллекциях.
+You can now call the write methods (`insert`, `insertMany`, `update`, `remove`, `clear`) on these transactional collections.
 
-*   **Ключевой момент:** Эти операции не применяются к базе данных немедленно. Они лишь регистрируются внутри объекта транзакции и будут выполнены единым блоком только после вызова `txn.commit()`.
-*   **Возвращаемые значения:** Транзакционные методы записи в текущей реализации **не возвращают** результат операции (например, вставленный документ). Они возвращают `Promise<void>`.
-*   **Генерация ID:** Если вам нужен ID нового документа для последующих операций в той же транзакции (например, вставить пользователя и сразу же записать лог с его ID), вы должны **сгенерировать этот ID на стороне клиента** перед вызовом `insert`.
+- **Key Point:** These operations are not immediately applied to the database. They are merely logged within the transaction object and will only be executed as a single unit after `txn.commit()` is called.
+- **Return Values:** Transactional write methods in the current implementation **do not** return the result of the operation (e.g., the inserted document). They return `Promise<void>`.
+- **ID Generation:** If you need a new document ID for subsequent operations in the same transaction (for example, inserting a user and immediately writing a log with their ID), you must **generate this ID on the client side** before calling `insert`.
 
 ```javascript
-// Генерируем ID пользователя заранее, так как он понадобится для лога
+// Generate the user ID in advance, as it will be needed for the log
 const { v4: uuidv4 } = require('uuid');
 const newUserId = uuidv4();
 
-// Регистрируем операции в транзакции
+// Log operations in the transaction
 await usersTxn.insert({
   _id: newUserId,
   name: 'Diana Prince',
-  department: 'Justice League'
+  department: 'Justice League',
 });
 
 await logsTxn.insert({
   timestamp: new Date().toISOString(),
   action: 'USER_CREATED_IN_TXN',
-  userId: newUserId, // Используем заранее сгенерированный ID
-  details: 'User Diana Prince added via transaction'
+  userId: newUserId, // Using a pre-generated ID
+  details: 'User Diana Prince added via transaction',
 });
 ```
 
-### Шаг 4: Завершение транзакции (`commit` или `rollback`)
+### Step 4: Committing the transaction (`commit` or `rollback`)
 
-У вас есть два способа завершить транзакцию:
+You have two ways to commit a transaction:
 
-*   **`await txn.commit()`**: Если все операции должны быть применены, вызовите `commit()`. WiseJSON DB атомарно запишет все зарегистрированные операции в WAL-файлы соответствующих коллекций и применит изменения к данным в памяти. Если на этом этапе произойдет сбой, механизм восстановления из WAL гарантирует, что незавершенная транзакция не будет применена, сохраняя целостность данных.
-*   **`await txn.rollback()`**: Если возникла ошибка или вы решили отменить изменения до вызова `commit()`, вызовите `rollback()`. Этот метод просто отменяет все зарегистрированные в транзакции операции, и никаких изменений в базе данных не происходит.
+- **`await txn.commit()`**: If all operations should be applied, call `commit()`. WiseJSON DB will atomically write all logged operations to the WAL files of the corresponding collections and apply the changes to the in-memory data. If a failure occurs at this stage, the WAL recovery mechanism ensures that the uncommitted transaction is not applied, preserving data integrity.
+- **`await txn.rollback()`**: If an error occurs or you decide to roll back changes before calling `commit()`, call `rollback()`. This method simply rolls back all operations registered in the transaction, and no changes are made to the database.
 
-#### Полный Пример Сценария с `commit`
+#### Complete Example Scenario with `commit`
 
-Этот пример демонстрирует создание нового пользователя и запись лога об этом событии в рамках одной атомарной операции.
+This example demonstrates creating a new user and writing a log about this event in a single atomic operation.
 
 ```javascript
 const WiseJSON = require('wise-json-db');
@@ -90,8 +89,8 @@ async function transactionCommitExample() {
   await usersCollection.initPromise;
   const logsCollection = await db.collection('logs');
   await logsCollection.initPromise;
-  
-  // Начинаем транзакцию
+
+  // Begin a transaction
   const txn = db.beginTransaction();
   const newUserId = uuidv4();
 
@@ -99,30 +98,29 @@ async function transactionCommitExample() {
     const txnUsers = txn.collection('users');
     const txnLogs = txn.collection('logs');
 
-    console.log('Регистрируем операции в транзакции...');
+    console.log('Registering operations in the transaction...');
     await txnUsers.insert({
       _id: newUserId,
       name: 'Clark Kent',
-      email: 'clark@dailyplanet.com'
+      email: 'clark@dailyplanet.com',
     });
     await txnLogs.insert({
       event: 'USER_REGISTRATION_TXN',
       userId: newUserId,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-    
-    // Если все успешно, коммитим транзакцию
-    console.log('Применяем транзакцию (commit)...');
-    await txn.commit();
-    console.log('Транзакция успешно применена.');
 
+    // If everything is successful, commit the transaction
+    console.log('Committing the transaction...');
+    await txn.commit();
+    console.log('The transaction was successfully committed.');
   } catch (transactionError) {
-    console.error('Ошибка внутри блока транзакции, откатываем:', transactionError);
+    console.error('Error inside the transaction block, rolling back:', transactionError);
     await txn.rollback();
-    console.log('Транзакция отменена (rollback).');
+    console.log('The transaction was rolled back.');
   } finally {
     if (db) {
-        await db.close();
+      await db.close();
     }
   }
 }
@@ -130,12 +128,12 @@ async function transactionCommitExample() {
 transactionCommitExample();
 ```
 
-#### Полный Пример Сценария с `rollback`
+#### Full Example Scenario with `rollback`
 
-Этот пример показывает, как транзакция отменяется при возникновении ошибки. Предположим, у нас есть коллекция `accounts` с документами `{ _id: 'acc1', balance: 100 }` и `{ _id: 'acc2', balance: 50 }`.
+This example shows how a transaction is rolled back when an error occurs. Let's assume we have an 'accounts' collection with documents { \_id: 'acc1', balance: 100 } and { \_id: 'acc2', balance: 50 }.
 
 ```javascript
-// ... инициализация db и коллекции 'accounts' ...
+// ... initialize db and the 'accounts' collection ...
 
 const txn = db.beginTransaction();
 const transferAmount = 30;
@@ -143,29 +141,28 @@ const transferAmount = 30;
 try {
   const txnAccounts = txn.collection('accounts');
 
-  // Списание с acc1
+  // Withdraw from acc1
   await txnAccounts.update('acc1', { balance: 100 - transferAmount });
-  console.log('Списание запланировано.');
+  console.log('Withdrawal scheduled.');
 
-  // Имитируем ошибку (например, проверка показала, что получатель заблокирован)
-  throw new Error('Получатель не может принять перевод!');
+  // Simulate an error (for example, verification shows that the recipient is blocked)
+  throw new Error('The recipient cannot accept the transfer!');
 
-  // Этот код не выполнится
+  // This code will not execute
   await txnAccounts.update('acc2', { balance: 50 + transferAmount });
   await txn.commit();
-
 } catch (transactionError) {
-  console.error('Ошибка во время транзакции:', transactionError.message);
-  console.log('Откатываем транзакцию (rollback)...');
+  console.error('Error during transaction:', transactionError.message);
+  console.log('Rolling back the transaction...');
   await txn.rollback();
-  console.log('Транзакция отменена. Балансы остались неизменными.');
+  console.log('The transaction has been canceled. The balances remain unchanged.');
 }
 
-// Проверка после транзакции покажет, что балансы не изменились.
+// A post-transaction check will show that the balances have not changed.
 ```
 
-### Важные Замечания по Транзакциям
+### Important Notes on Transactions
 
-*   **Производительность**: Транзакции, особенно затрагивающие множество операций или коллекций, могут быть немного медленнее отдельных операций из-за накладных расходов на управление состоянием транзакции и запись в WAL. Используйте их там, где целостность данных важнее максимальной скорости.
-*   **Ошибки при `commit`**: Если `txn.commit()` выбрасывает ошибку (например, из-за невозможности записать на диск), состояние данных останется консистентным. Механизм восстановления WiseJSON DB из WAL при следующем запуске не применит незавершенные транзакционные блоки.
-*   **Длительные транзакции**: Избегайте очень длительных транзакций, которые могут долго удерживать ресурсы. Хотя WiseJSON DB не использует традиционные блокировки строк/таблиц до момента коммита, файловая блокировка на уровне коллекции может быть задействована при фиксации транзакции.
+- **Performance**: Transactions, especially those involving many operations or collections, can be slightly slower than individual operations due to the overhead of managing transaction state and writing to WAL. Use them where data integrity is more important than maximum speed.
+- **Commit Errors**: If `txn.commit()` throws an error (for example, due to an inability to write to disk), the data state will remain consistent. WiseJSON DB's WAL recovery mechanism will not reapply uncommitted transaction blocks on the next startup.
+- **Long-running Transactions**: Avoid very long-running transactions that may hold resources for a long time. Although WiseJSON DB does not use traditional row/table locks until the commit, collection-level file locking may be applied when the transaction is committed.

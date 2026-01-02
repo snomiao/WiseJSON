@@ -1,136 +1,142 @@
-```markdown
 docs/06-troubleshooting.md
-# 06 - Диагностика и Решение Проблем (FAQ)
 
-В этом разделе собраны ответы на часто задаваемые вопросы и способы решения распространенных проблем, с которыми вы можете столкнуться при работе с WiseJSON DB.
+# 06 - Troubleshooting and Troubleshooting (FAQ)
 
-### Q1: Мои данные не сохраняются после перезапуска приложения. Что делать?
+This section contains answers to frequently asked questions and solutions to common issues you may encounter when working with WiseJSON DB.
 
-**A1:** Наиболее вероятная причина — вы не закрываете базу данных должным образом перед завершением работы приложения. WiseJSON DB выполняет финальное сохранение данных (включая запись чекпоинтов и компакцию WAL) при вызове метода `await db.close()`.
+### Q1: My data isn't saved after I restart my application. What should I do?
 
-*   **Решение:** Убедитесь, что в вашем коде есть блок `finally` или обработчик завершения процесса, который вызывает `await db.close()`.
+**A1:** The most likely cause is that you're not closing the database properly before terminating your application. WiseJSON DB performs final data saving (including writing checkpoints and WAL compaction) when you call the `await db.close()` method.
 
-    ```javascript
-    let db;
-    try {
-      db = new WiseJSON(dbPath);
-      await db.init();
-      // ... ваша работа с БД ...
-    } catch (error) {
-      console.error(error);
-    } finally {
-      if (db) {
-        await db.close(); // Обязательный вызов!
-      }
-    }
-    ```
+- **Solution:** Ensure your code has a `finally` block or a process termination handler that calls `await db.close()`.
 
-*   WiseJSON DB пытается автоматически сохраниться при получении сигналов `SIGINT` и `SIGTERM`, но это не всегда надежно, особенно при аварийном завершении. Явный вызов `db.close()` — лучшая практика.
+```javascript
+let db;
+try {
+  db = new WiseJSON(dbPath);
+  await db.init();
+  // ... your work with the database ...
+} catch (error) {
+  console.error(error);
+} finally {
+  if (db) {
+    await db.close(); // Required!
+  }
+}
+```
 
-### Q2: Я получаю ошибку `Duplicate value '...' for unique index '...'`. Что это значит?
+- WiseJSON DB tries to automatically save when receiving `SIGINT` and `SIGTERM` signals, but this isn't always reliable, especially in the event of a crash. Explicitly calling `db.close()` is best practice.
 
-**A2:** Эта ошибка возникает, когда вы пытаетесь выполнить операцию (`insert`, `insertMany`, `update`, `updateMany`), которая приведет к нарушению уникальности значения в поле, для которого создан уникальный индекс.
+### Q2: I get the error `Duplicate value '...' for unique index '...'`. What does this mean?
 
-*   **Решение:**
-    1.  **Проверьте данные:** Убедитесь, что значение, которое вы пытаетесь вставить или на которое пытаетесь обновить, действительно уникально для этого поля в коллекции.
-    2.  **Логика приложения:** Возможно, вам нужно добавить проверку на существование такого значения перед выполнением операции записи.
-        ```javascript
-        const existingDoc = await usersCollection.findOneByIndexedValue('email', newUser.email);
-        if (existingDoc) {
-          console.error(`Пользователь с email ${newUser.email} уже существует!`);
-        } else {
-          await usersCollection.insert(newUser);
-        }
-        ```
-    3.  **Тип индекса:** Если это поле не должно быть строго уникальным, возможно, вам следует удалить уникальный индекс и создать вместо него стандартный (неуникальный) индекс, или не создавать индекс вовсе, если поиск по нему не частый.
+**A2:** This error occurs when you attempt an operation (`insert`, `insertMany`, `update`, `updateMany`) that would violate the uniqueness of a value in a field for which a unique index has been created.
 
-### Q3: Как посмотреть содержимое базы данных вручную (файлы на диске)?
+- **Solution:**
 
-**A3:** Данные WiseJSON DB хранятся в файловой системе в директории, которую вы указали при создании экземпляра `WiseJSON`. Для каждой коллекции создается своя поддиректория.
+1. **Validate the data:** Make sure that the value you are trying to insert or update is indeed unique for this field in the collection.
+2. **Application logic:** You may need to add a check for the existence of such a value before performing the write operation.
 
-*   **Путь к коллекции:** ` <dbPath>/<collectionName>/ `
-*   **Чекпоинты (основные данные):** ` <dbPath>/<collectionName>/_checkpoints/ `
-    *   В этой директории хранятся файлы чекпоинтов. Каждый чекпоинт состоит из:
-        *   Одного `checkpoint_meta_<collectionName>_<timestamp>.json` файла (метаданные коллекции, включая информацию об индексах).
-        *   Одного или нескольких `checkpoint_data_<collectionName>_<timestamp>_segX.json` файлов (сегменты с данными документов в формате JSON-массива).
-    *   Самые свежие данные обычно находятся в файлах чекпоинта с последней временной меткой.
-*   **WAL (Write-Ahead Log):** ` <dbPath>/<collectionName>/wal_<collectionName>.log `
-    *   Этот файл содержит операции, которые были выполнены после последнего чекпоинта. Каждая строка — это JSON-объект, описывающий операцию.
-*   **Для удобного просмотра:**
-    *   Используйте веб-интерфейс **Data Explorer** (`wisejson-explorer-server`), который предоставляет GUI для просмотра коллекций и документов.
-    *   Используйте CLI-утилиту **`wisejson-explorer show-collection <collectionName>`** или **`wise-json find <collectionName>`**.
+```javascript
+const existingDoc = await usersCollection.findOneByIndexedValue('email', newUser.email);
+if (existingDoc) {
+  console.error(`User with email ${newUser.email} already exists!`);
+} else {
+  await usersCollection.insert(newUser);
+}
+```
 
-### Q4: Мое приложение падает с ошибкой `EMFILE: too many open files`.
+3. **Index Type:** If this field doesn't need to be strictly unique, you might want to drop the unique index and create a standard (non-unique) index instead, or not create an index at all if it's not frequently searched.
 
-**A4:** Эта ошибка операционной системы означает, что ваш процесс открыл слишком много файловых дескрипторов. Применительно к WiseJSON DB, это может произойти, если:
+### Q3: How can I view the database contents manually (files on disk)?
 
-1.  **Не закрываются экземпляры `WiseJSON` или коллекции:** Каждый экземпляр и коллекция удерживают файловые дескрипторы для WAL, чекпоинтов и блокировок. Если вы постоянно создаете новые экземпляры `WiseJSON` или получаете коллекции без их последующего закрытия (через `db.close()`), количество открытых файлов будет расти.
-    *   **Решение:** Убедитесь, что вы используете один экземпляр `WiseJSON` на протяжении жизни приложения (или правильно управляете его жизненным циклом). Вызывайте `db.close()`, когда экземпляр больше не нужен.
-2.  **Очень частые операции, создающие временные файлы:** Хотя WiseJSON DB использует атомарные операции записи через временные файлы, при экстремально высокой частоте таких операций теоретически возможно исчерпание лимита, если ОС не успевает освобождать дескрипторы. Однако, это менее вероятно, чем первая причина.
-3.  **Другие части вашего приложения также активно работают с файлами.**
+**A3:** WiseJSON DB data is stored on the file system in the directory you specified when creating the WiseJSON instance. A subdirectory is created for each collection.
 
-*   **Диагностика:** Используйте утилиты операционной системы (например, `lsof -p <PID>` в Linux/macOS) для проверки, какие файлы открыты вашим процессом.
+- **Collection Path:** `<dbPath>/<collectionName>/`
+- **Checkpoints (Master Data):** `<dbPath>/<collectionName>/_checkpoints/`
+  - This directory stores the checkpoint files. Each checkpoint consists of:
+  - One `checkpoint_meta_<collectionName>_<timestamp>.json` file (collection metadata, including index information).
+  - One or more `checkpoint_data_<collectionName>_<timestamp>_segX.json` files (segments containing document data in JSON array format).
+  - The most recent data is typically found in the checkpoint files with the latest timestamp.
+- **WAL (Write-Ahead Log):** `<dbPath>/<collectionName>/wal_<collectionName>.log`
+  - This file contains operations performed since the last checkpoint. Each line is a JSON object describing the operation.
+- **For easy viewing:**
+  - Use the **Data Explorer** web interface (`wisejson-explorer-server`), which provides a GUI for viewing collections and documents. \* Use the CLI utility **`wisejson-explorer show-collection <collectionName>`** or **`wise-json find <collectionName>`**.
 
-### Q5: Как сделать бэкап базы данных WiseJSON DB?
+### Q4: My application crashes with the error `EMFILE: too many open files`.
 
-**A5:** Поскольку WiseJSON DB является файловой базой данных, бэкап можно сделать простым копированием всей директории базы данных (`dbPath`).
+**A4:** This operating system error means that your process has opened too many file descriptors. In the case of WiseJSON DB, this can happen if:
 
-*   **Рекомендации:**
-    1.  **Остановите приложение (или убедитесь, что нет активных операций записи):** Это гарантирует, что все данные будут консистентны и WAL-файлы не будут в процессе изменения.
-    2.  **Скопируйте всю директорию `dbPath`** в безопасное место.
-    *   Если остановка приложения невозможна, вызовите `await db.flushToDisk()` для всех активных коллекций или `await db.close()` (если это допустимо) перед копированием, чтобы минимизировать количество операций в WAL, которые не попали в последний чекпоинт. Однако, копирование "живой" базы без остановки записи не гарантирует 100% консистентности на момент копирования, хотя механизм восстановления из WAL обычно справляется с этим при восстановлении из такого бэкапа.
+1. **`WiseJSON` instances or collections are not closed:** Each instance and collection holds file descriptors for WAL, checkpoints, and locks. If you continually create new `WiseJSON` instances or retrieve collections without closing them (using `db.close()`), the number of open files will grow.
 
-### Q6: Что делать, если WAL-файл или файл чекпоинта поврежден?
+    - **Solution:** Ensure that you use a single `WiseJSON` instance for the lifetime of your application (or properly manage its lifecycle). Call `db.close()` when the instance is no longer needed.
 
-**A6:** WiseJSON DB имеет механизмы для работы с такими ситуациями:
+2. **Very frequent operations creating temporary files:** Although WiseJSON DB uses atomic writes to temporary files, with an extremely high frequency of such operations, it is theoretically possible to exhaust the limit if the OS does not keep up with the release of descriptors. However, this is less likely than the first reason.
+3. **Other parts of your application also actively access files.**
 
-*   **Поврежденный WAL-файл:**
-    *   При инициализации коллекции, если парсинг строки WAL не удается, по умолчанию (с `walReadOptions: { recover: false, strict: false }`) эта строка будет пропущена с выводом предупреждения в консоль, и WiseJSON DB попытается продолжить загрузку.
-    *   Вы можете установить опцию `walReadOptions: { recover: true }` при создании экземпляра `WiseJSON`, чтобы более агрессивно пытаться восстановить данные, пропуская битые строки.
-    *   Если WAL сильно поврежден, вы можете потерять операции, совершенные после последнего успешного чекпоинта.
-*   **Поврежденный файл чекпоинта:**
-    *   Если файл метаданных чекпоинта (`checkpoint_meta_...json`) или один из его сегментов данных (`checkpoint_data_..._segX.json`) поврежден (например, невалидный JSON), WiseJSON DB при загрузке попытается его проигнорировать (с выводом предупреждения) и загрузить предыдущий доступный (неповрежденный) чекпоинт, если он есть.
-    *   Если самый последний чекпоинт поврежден, а предыдущего нет, коллекция может инициализироваться как пустая (или только с данными из WAL, если он применялся к пустому состоянию).
-*   **Восстановление из бэкапа:** Если повреждение серьезное, лучшим решением будет восстановление из последней резервной копии.
+- **Diagnostics:** Use operating system utilities (e.g., `lsof -p <PID>` on Linux/macOS) to check which files your process has open.
 
-### Q7: Есть ли ограничения на размер документа или коллекции?
+### Q5: How do I back up a WiseJSON DB database?
+
+**A5:** Since WiseJSON DB is a file-based database, a backup can be made by simply copying the entire database directory (`dbPath`).
+
+- **Recommendations:**
+
+1. **Stop the application (or ensure there are no active write operations):** This ensures that all data is consistent and WAL files are not being modified.
+2. **Copy the entire `dbPath`** directory to a safe location.
+
+- If stopping the application is not possible, call await db.flushToDisk() for all active collections or await db.close() (if applicable) before copying to minimize the number of WAL operations that missed the last checkpoint. However, copying a live database without stopping writes does not guarantee 100% consistency at the time of copying, although the WAL recovery mechanism usually handles this when restoring from such a backup.
+
+### Q6: What should I do if the WAL file or checkpoint file is corrupted?
+
+**A6:** WiseJSON DB has mechanisms for handling these situations:
+
+- **Corrupted WAL file:**
+- When initializing a collection, if parsing a WAL row fails, by default (with `walReadOptions: { recover: false, strict: false }`) this row will be skipped, a warning will be printed to the console, and WiseJSON DB will attempt to continue loading.
+- You can set the `walReadOptions: { recover: true }` option when creating a `WiseJSON` instance to more aggressively attempt to recover data, skipping broken rows.
+- If the WAL is severely corrupted, you may lose operations performed after the last successful checkpoint. 
+* **Corrupted checkpoint file:**
+- If the checkpoint metadata file (`checkpoint_meta_...json`) or one of its data segments (`checkpoint_data_..._segX.json`) is corrupted (for example, invalid JSON), WiseJSON DB will attempt to ignore it during loading (with a warning) and load the previous available (uncorrupted) checkpoint, if one exists.
+- If the most recent checkpoint is corrupted and there is no previous checkpoint, the collection may be initialized as empty (or with only WAL data, if it was applied to an empty state).
+- **Restoring from backup:** If the corruption is severe, the best solution is to restore from the latest backup.
+
+### Q7: Is there a limit on the size of a document or collection?
 
 **A7:**
-*   **Размер документа:** Теоретически, размер одного JSON-документа ограничен доступной оперативной памятью Node.js (V8) для его сериализации/десериализации и обработки. Практически, очень большие документы (много мегабайт) могут быть неэффективны для хранения и обработки. Рекомендуется держать документы в разумных пределах.
-*   **Размер коллекции:** Общий размер коллекции (суммарный размер всех ее документов и индексов) ограничен доступным дисковым пространством. WiseJSON DB использует сегментированные чекпоинты для эффективной работы с большими коллекциями, разбивая данные на более мелкие файлы при сохранении.
-*   **Количество документов:** Ограничено в основном производительностью и доступными ресурсами (память для хранения в Map, дисковое пространство). На очень больших количествах документов (миллионы) производительность операций без индексов или со сложными `find` предикатами может снижаться.
 
-### Q8: Можно ли использовать WiseJSON DB в нескольких процессах одновременно?
+- **Document Size:** Theoretically, the size of a single JSON document is limited by the available RAM in Node.js (V8) for serialization/deserialization and processing. In practice, very large documents (many megabytes) may be inefficient to store and process. It is recommended to keep document sizes within reasonable limits.
+- **Collection Size:** The total size of a collection (the combined size of all its documents and indexes) is limited by available disk space. WiseJSON DB uses sharded checkpoints to efficiently work with large collections, breaking data into smaller files when storing.
+- **Number of Documents:** Limited primarily by performance and available resources (memory for storing Maps, disk space). With very large document counts (millions), the performance of operations without indexes or with complex find predicates may decrease.
 
-**A8:** Да, WiseJSON DB использует библиотеку `proper-lockfile` для обеспечения безопасности при доступе к файлам базы данных из нескольких **разных процессов Node.js**, запущенных на одной машине и работающих с одной и той же директорией БД. Это предотвращает гонки данных и повреждение файлов.
+### Q8: Can WiseJSON DB be used in multiple processes simultaneously?
 
-*   Каждая операция записи (insert, update, remove, clear, создание/удаление индекса, flushToDisk) на уровне коллекции захватывает эксклюзивную блокировку на директорию коллекции на время выполнения операции. Если другой процесс пытается выполнить операцию записи в ту же коллекцию, он будет ожидать освобождения блокировки.
-*   Операции чтения обычно не требуют таких строгих блокировок и могут выполняться параллельно более эффективно, но они всегда будут читать консистентное состояние, зафиксированное последней операцией записи.
+**A8:** Yes, WiseJSON DB uses the `proper-lockfile` library to ensure security when accessing database files from multiple **different Node.js** processes running on the same machine and accessing the same database directory. This prevents data races and file corruption.
 
-### Q9: Как WiseJSON DB обеспечивает ACID-свойства для транзакций?
+- Each write operation (insert, update, remove, clear, create/delete index, flushToDisk) at the collection level acquires an exclusive lock on the collection directory for the duration of the operation. If another process attempts to write to the same collection, it will wait for the lock to be released.
+- Read operations typically do not require such strict locks and can be executed in parallel more efficiently, but they will always read the consistent state committed by the last write operation.
 
-**A9:** WiseJSON DB стремится к ACID-свойствам следующим образом:
+### Q9: How does WiseJSON DB ensure ACID properties for transactions?
 
-*   **Atomicity (Атомарность):**
-    *   *На уровне одной операции:* Каждая отдельная операция (insert, update, remove) атомарна благодаря записи в WAL перед изменением данных в памяти и механизму восстановления.
-    *   *На уровне транзакции (`db.beginTransaction()`):* Все операции внутри блока `txn.commit()` записываются как единый блок в WAL-файлы всех затронутых коллекций. Если запись этого блока в WAL или последующее применение к памяти прерывается, при восстановлении незавершенный транзакционный блок не будет применен, обеспечивая атомарность "все или ничего" для этого блока.
-*   **Consistency (Согласованность):**
-    *   Уникальные индексы помогают поддерживать согласованность данных, предотвращая дубликаты.
-    *   Транзакции переводят базу данных из одного согласованного состояния в другое. Если транзакция прерывается, данные откатываются (или не применяются) к предыдущему согласованному состоянию.
-*   **Isolation (Изолированность):**
-    *   Операции внутри транзакции не видны другим частям приложения (или другим транзакциям) до вызова `commit()`. Это обеспечивает базовый уровень изоляции (read committed для данных вне транзакции).
-    *   WiseJSON DB не реализует сложные уровни изоляции SQL (например, serializable). При одновременном доступе из нескольких процессов, файловые блокировки `proper-lockfile` на уровне директории коллекции сериализуют операции записи, обеспечивая изоляцию на уровне файловой системы.
-*   **Durability (Долговечность):**
-    *   После успешного завершения операции записи (или коммита транзакции) и записи данных в WAL (и, в конечном итоге, в чекпоинт), данные считаются сохраненными и переживут перезапуск приложения или сбой системы (с учетом особенностей кэширования ОС).
+**A9:** WiseJSON DB strives for ACID properties as follows:
 
+- **Atomicity:**
+- _At the single operation level:_ Each individual operation (insert, update, delete) is atomic due to a write to WAL before modifying the data in memory and the recovery mechanism.
+- _At the transaction level (`db.beginTransaction()`):_ All operations within a `txn.commit()` block are written as a single block to the WAL files of all affected collections. If the write of this block to WAL or the subsequent application to memory is aborted, the uncommitted transaction block will not be applied during recovery, ensuring all-or-nothing atomicity for this block.
+- **Consistency:**
+- Unique indexes help maintain data consistency by preventing duplicates.
+- Transactions move the database from one consistent state to another. If a transaction is aborted, the data is rolled back (or unapplied) to the previous consistent state. 
+- **Isolation:**
+- Operations within a transaction are not visible to other parts of the application (or other transactions) until `commit()` is called. This provides a basic level of isolation (read committed for data outside the transaction).
+- WiseJSON DB does not implement complex SQL isolation levels (e.g., serializable). When accessed concurrently by multiple processes, `proper-lockfile` file locks at the collection directory level serialize write operations, providing filesystem-level isolation.
+- **Durability:**
+- Once a write operation (or transaction commit) successfully completes and the data is written to the WAL (and ultimately to the checkpoint), the data is considered persistent and will survive an application restart or system crash (subject to OS caching).
 
-### Q10: [Checkpoint] WARN (или отсутствие WARN) при удалении старых чекпоинтов: `ENOENT`
+### Q10: [Checkpoint] WARN (or missing WARN) when deleting old checkpoints: `ENOENT`
 
-При автоматической ротации старых чекпоинтов (когда сохраняется только определенное количество последних, например, `checkpointsToKeep: 5`), система пытается удалить файлы чекпоинтов, которые больше не нужны.
+When automatically rotating old checkpoints (when only a certain number of the most recent ones are kept, for example, `checkpointsToKeep: 5`), the system attempts to delete checkpoint files that are no longer needed.
 
-*   **Если вы видите предупреждения `[WARN] [Checkpoint] Не удалось удалить data/meta checkpoint: ... ENOENT: no such file or directory ...` (в более старых версиях или при специфических ошибках):**
-    Это означает, что файл чекпоинта, который система пыталась удалить, уже отсутствовал на диске. Это обычно не является проблемой для целостности данных и может произойти, если файл был удален вручную, или предыдущая операция очистки была прервана.
+- **If you see warnings like `[WARN] [Checkpoint] Failed to delete data/meta checkpoint: ... ENOENT: no such file or directory ...` (in older versions or with specific errors):**
+  This means that the checkpoint file the system attempted to delete was no longer on disk. This is typically not a data integrity issue and can occur if the file was deleted manually or a previous cleanup operation was interrupted.
 
-*   **В актуальных версиях WiseJSON DB:** Логика очистки чекпоинтов была улучшена. Ошибка `ENOENT` (файл не найден) при попытке удалить уже отсутствующий файл чекпоинта **больше не логируется как предупреждение (`WARN`)**, так как это не является индикатором проблемы. Если же при удалении файла возникает другая ошибка (например, отказ в доступе `EACCES`), она по-прежнему может быть залогирована как предупреждение.
+- **In current versions of WiseJSON DB:** The checkpoint cleanup logic has been improved. The `ENOENT` (file not found) error when attempting to delete a missing checkpoint file is no longer logged as a warning (`WARN`)\*\*, as it does not indicate a problem. However, if another error occurs when deleting the file (such as an `EACCES` access denied error), it may still be logged as a warning.
 
-Если у вас возникли другие вопросы или проблемы, рекомендуется также проверить GitHub Issues проекта на предмет похожих ситуаций или создать новый issue с подробным описанием проблемы.
+If you have other questions or problems, we recommend checking the project's GitHub Issues for similar situations or creating a new issue with a detailed description of the problem.

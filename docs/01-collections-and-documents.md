@@ -1,289 +1,278 @@
-```markdown
-# 01 - Работа с Коллекциями и Документами
+# 01 - Working with Collections and Documents
 
-В этом разделе подробно рассматриваются основные операции по управлению данными (CRUD - Create, Read, Update, Delete) в коллекциях WiseJSON DB, а также установка времени жизни (TTL) для документов.
+This section covers in detail the basic data management operations (CRUD - Create, Read, Update, Delete) in WiseJSON DB collections, as well as setting the time-to-live (TTL) for documents.
 
-**Предполагается, что у вас уже есть инициализированный экземпляр `db` и получен экземпляр `collection`, как описано в разделе `00-introduction-and-setup.md`.**
+**This section assumes you already have an initialized `db` instance and have obtained a `collection` instance, as described in `00-introduction-and-setup.md`.**
 
-## Добавление Документов (Create)
+## Adding Documents (Create)
 
-### Как добавить один документ (`insert`)
+### How to insert a single document (`insert`)
 
-Метод `collection.insert(document)` используется для добавления одного нового документа в коллекцию.
+The `collection.insert(document)` method is used to add a single new document to a collection.
 
-*   **Параметры:**
-    *   `document {object}`: JavaScript-объект, который вы хотите сохранить.
-        *   Если вы предоставите поле `_id` в объекте `document`, оно будет использовано как уникальный идентификатор.
-        *   Если поле `_id` не предоставлено, WiseJSON DB автоматически сгенерирует уникальный `_id` (согласно опции `idGenerator`).
-*   **Возвращает:** `Promise<object>` - Промис, который разрешается объектом вставленного документа. Этот объект будет содержать поля `_id`, `createdAt` (время создания в формате ISO-строки) и `updatedAt` (время последнего обновления, изначально совпадает с `createdAt`).
-*   **Ошибки:** Может выбросить ошибку, если, например, нарушается уникальность индекса.
+* **Parameters:**
+* `document {object}`: The JavaScript object you want to save.
+* If you provide an `_id` field in the `document` object, it will be used as a unique identifier.
+* If the _id field is not provided, WiseJSON DB will automatically generate a unique _id (according to the idGenerator option).
+* **Returns:** `Promise<object>` - A promise that resolves to the inserted document object. This object will contain the fields `_id`, `createdAt` (creation time in ISO string format), and `updatedAt` (last updated time, initially the same as `createdAt`).
+* **Errors:** May throw an error if, for example, the index is not unique.
 
-**Пример:**
+**Example:**
 
 ```javascript
-// Добавляем новый документ с авто-ID
+// Add a new document with an auto-ID
 const newUser = await usersCollection.insert({
-  name: 'Alice Wonder',
-  email: 'alice@example.com',
-  age: 30
+name: 'Alice Wonder',
+email: 'alice@example.com',
+age: 30
 });
-console.log('Добавлен пользователь:', newUser);
-// Пример вывода newUser:
+console.log('Added user:', newUser);
+// Sample output newUser:
 // {
-//   name: 'Alice Wonder',
-//   email: 'alice@example.com',
-//   age: 30,
-//   _id: 'сгенерированный_id',
-//   createdAt: '2023-10-27T10:00:00.000Z',
-//   updatedAt: '2023-10-27T10:00:00.000Z'
+// name: 'Alice Wonder',
+// email: 'alice@example.com',
+// age: 30,
+// _id: 'generated_id',
+// createdAt: '2023-10-27T10:00:00.000Z',
+// updatedAt: '2023-10-27T10:00:00.000Z'
 // }
 
-// Добавляем документ с предопределенным _id
+// Add a document with a predefined _id
 const specificUser = await usersCollection.insert({
-  _id: 'user123',
-  name: 'Bob The Builder',
-  role: 'admin'
+_id: 'user123',
+name: 'Bob The Builder',
+role: 'admin'
 });
-console.log('Добавлен пользователь с конкретным ID:', specificUser);
+console.log('Added user with specific ID:', specificUser);
 ```
 
-### Как добавить несколько документов сразу (`insertMany`)
+### How to add multiple documents at once (`insertMany`)
 
-Метод `collection.insertMany(documentsArray)` позволяет эффективно добавить массив документов за одну операцию.
+The `collection.insertMany(documentsArray)` method allows you to efficiently add an array of documents in a single operation.
 
-*   **Параметры:**
-    *   `documentsArray {Array<object>}`: Массив JavaScript-объектов для вставки.
-*   **Возвращает:** `Promise<Array<object>>` - Промис, который разрешается массивом вставленных документов, каждый из которых будет содержать `_id`, `createdAt` и `updatedAt`.
-*   **Поведение при ошибках:** Если при обработке возникает ошибка (например, нарушение уникального индекса), операция прерывается, и будет выброшена ошибка. Документы до проблемного могут быть уже вставлены.
+* **Parameters:**
+* `documentsArray {Array<object>}`: An array of JavaScript objects to insert.
+* **Returns:** `Promise<Array<object>>` - A promise that resolves to an array of inserted documents, each containing `_id`, `createdAt`, and `updatedAt`.
+* **Error Handling:** If an error occurs during processing (such as a unique index violation), the operation is aborted and an error is thrown. Documents before the problematic one may already have been inserted.
 
-**Пример:**
+**Example:**
 
 ```javascript
 const newProducts = [
-  { name: 'Ноутбук', category: 'Электроника', price: 1200 },
-  { name: 'Смартфон', category: 'Электроника', price: 800 },
-  { _id: 'book-451', name: 'Книга "451 градус по Фаренгейту"', category: 'Книги', price: 15 }
+{ name: 'Laptop', category: 'Electronics', price: 1200 },
+{ name: 'Smartphone', category: 'Electronics', price: 800 },
+{ _id: 'book-451', name: 'Fahrenheit 451', category: 'Books', price: 15 }
 ];
 
 const insertedProducts = await productsCollection.insertMany(newProducts);
-console.log(`Успешно добавлено ${insertedProducts.length} продуктов.`);
+console.log(`Successfully added ${insertedProducts.length} products.`);
 ```
 
-### Как добавить документ с ограниченным временем жизни (TTL)
+### How to add a document with a limited time to live (TTL)
 
-WiseJSON DB позволяет устанавливать время жизни для документов, после истечения которого они будут автоматически удалены. Это делается с помощью полей `ttl` или `expireAt` в самом документе.
+WiseJSON DB allows you to set a time to live for documents, after which they will be automatically deleted. This is done using the `ttl` or `expireAt` fields in the document itself.
 
-*   **`ttl {number}`**: Время жизни документа в миллисекундах с момента его создания (поле `createdAt`).
-*   **`expireAt {number | string}`**: Точное время (Unix timestamp в миллисекундах или строка в формате ISO 8601), когда документ должен истечь и быть удален.
+* **`ttl {number}`**: The document's lifetime in milliseconds since its creation (the `createdAt` field).
+* **`expireAt {number | string}`**: The exact time (Unix timestamp in milliseconds or an ISO 8601 string) when the document should expire and be deleted.
 
-Если указаны оба поля, приоритет будет у `expireAt`. Очистка устаревших документов происходит периодически.
+If both fields are specified, `expireAt` takes precedence. Expired documents are purged periodically.
 
-**Пример:**
+**Example:**
 
 ```javascript
-// Документ, который "умрет" через 10 секунд после создания
+// A document that will "die" 10 seconds after creation
 await tempCollection.insert({
-  message: 'Это сообщение исчезнет через 10 секунд.',
-  ttl: 10000 // 10 секунд
+message: 'This message will disappear in 10 seconds.',
+ttl: 10000 // 10 seconds
 });
 
-// Документ, который "умрет" в определенное время
+// A document that will expire at a certain time
 await tempCollection.insert({
-  data: 'Информация, актуальная 1 минуту.',
-  expireAt: Date.now() + 60000 // Через 60 секунд
+data: 'Information valid for 1 minute.',
+expireAt: Date.now() + 60000 // After 60 seconds
 });
 ```
 
-## Чтение Документов (Read)
+## Reading Documents (Read)
 
-Описание операций чтения (`getById`, `find`, `findOne`), использующих мощные фильтры и индексы, находится в следующем разделе: **`02-querying-and-indexing.md`**.
+A description of read operations (`getById`, `find`, `findOne`) using powerful filters and indexes is in the following section: **`02-querying-and-indexing.md`**.
 
-## Обновление Документов (Update)
+## Updating Documents (Update)
 
-WiseJSON DB предлагает несколько методов для обновления документов.
+WiseJSON DB offers several methods for updating documents.
 
-### Как обновить один документ по ID (`update`)
-
-Метод `collection.update(id, updates)` позволяет частично обновить поля существующего документа. Поля, присутствующие в `updates`, будут изменены или добавлены, а отсутствующие — останутся без изменений.
-
-*   **Параметры:**
-    *   `id {string}`: Уникальный `_id` документа для обновления.
-    *   `updates {object}`: Объект, содержащий поля и их новые значения.
-*   **Возвращает:** `Promise<object | null>` - Промис, который разрешается обновленным объектом документа, или `null`, если документ не найден.
-*   **Важно:** Этот метод не может изменить `_id` или `createdAt`. Поле `updatedAt` будет обновлено автоматически.
-
-**Пример:**
+**Example:**
 
 ```javascript
 const userToUpdate = await usersCollection.findOne({ email: 'alice@example.com' });
 if (userToUpdate) {
-  const updatedUser = await usersCollection.update(userToUpdate._id, {
-    age: 31,
-    status: 'active' // Добавляем новое поле
-  });
-  console.log('Пользователь после обновления:', updatedUser);
+const updatedUser = await usersCollection.update(userToUpdate._id, {
+age: 31,
+status: 'active' // Add a new field
+});
+console.log('User after update:', updatedUser);
 }
 ```
 
-### Продвинутое обновление с фильтрами и операторами
+### Advanced updating with filters and operators
 
-Для более сложных обновлений используются методы, принимающие **фильтр** для поиска документов и **операторы обновления**, аналогичные MongoDB.
+For more complex updates, methods that accept a **filter** for searching documents and **update operators**, similar to MongoDB, are used.
 
-**Основные операторы обновления:**
-*   `$set`: Устанавливает значение поля.
-*   `$inc`: Увеличивает (или уменьшает) числовое поле.
-*   `$unset`: Удаляет поле из документа.
-*   `$push`: Добавляет элемент в массив.
+**Basic update operators:**
+* `$set`: Sets the value of a field.
+* `$inc`: Increments (or decrements) a numeric field. 
+* `$unset`: Removes a field from a document.
+* `$push`: Adds an element to an array.
 
-#### Обновление одного документа по фильтру (`updateOne`)
+#### Updating a single document by filter (`updateOne`)
 
-Метод `collection.updateOne(filter, update)` находит **первый** документ, соответствующий `filter`, и применяет к нему изменения, описанные в `update`.
+The `collection.updateOne(filter, update)` method finds the **first** document matching `filter` and applies the changes described in `update` to it.
 
-*   **Параметры:**
-    *   `filter {object}`: Объект-фильтр для поиска (синтаксис как в `find`).
-    *   `update {object}`: Объект с операторами обновления.
-*   **Возвращает:** `Promise<{ matchedCount: number, modifiedCount: number }>`
-    *   `matchedCount`: Количество найденных документов (0 или 1).
-    *   `modifiedCount`: Количество реально измененных документов (0 или 1).
+* **Parameters:**
+* `filter {object}`: The filter object to search for (syntax as in `find`).
+* `update {object}`: An object with update operators.
+* **Returns:** `Promise<{ matchedCount: number, modifiedCount: number }>`
+* `matchedCount`: The number of found documents (0 or 1).
+* `modifiedCount`: The number of actually modified documents (0 or 1).
 
-**Пример:**
+**Example:**
 
 ```javascript
-// Увеличить возраст пользователя 'Alice' на 1 и установить ей новый статус
+// Increase user 'Alice''s age by 1 and set her new status
 const filter = { email: 'alice@example.com' };
 const update = {
-  $inc: { age: 1 },
-  $set: { lastSeen: new Date().toISOString() }
+$inc: { age: 1 },
+$set: { lastSeen: new Date().toISOString() }
 };
 
 const result = await usersCollection.updateOne(filter, update);
-console.log(`Найдено для обновления: ${result.matchedCount}, изменено: ${result.modifiedCount}`);
+console.log(`Found to update: ${result.matchedCount}, modified: ${result.modifiedCount}`);
 ```
 
-#### Обновление нескольких документов по фильтру (`updateMany`)
+#### Updating multiple documents by filter (`updateMany`)
 
-Метод `collection.updateMany(filter, update)` применяет изменения ко **всем** документам, которые соответствуют `filter`.
+The `collection.updateMany(filter, update)` method applies changes to **all** documents that match `filter`.
 
-*   **Параметры:** Аналогичны `updateOne`.
-*   **Возвращает:** `Promise<{ matchedCount: number, modifiedCount: number }>`
+* **Parameters:** Similar to `updateOne`.
+* **Returns:** `Promise<{ matchedCount: number, modifiedCount: number }>`
 
-**Пример:**
+**Example:**
 
 ```javascript
-// Дать скидку 10% на все книги в наличии
-const filter = { category: 'Книги', stock: { $gt: 0 } };
+// Give a 10% discount on all books in stock
+const filter = { category: 'Books', stock: { $gt: 0 } };
 const update = { $set: { onSale: true, discount: 0.1 } };
 
 const result = await productsCollection.updateMany(filter, update);
-console.log(`Найдено товаров для скидки: ${result.matchedCount}, обновлено: ${result.modifiedCount}`);
+console.log(`Products found for discount: ${result.matchedCount}, updated: ${result.modifiedCount}`);
 ```
 
-#### Найти и обновить атомарно (`findOneAndUpdate`)
+#### Find and update atomically (`findOneAndUpdate`)
 
-Этот метод находит один документ, обновляет его и возвращает. Идеально подходит для сценариев, где нужно получить документ в его старом или новом состоянии сразу после изменения (например, для счетчиков).
+This method finds a single document, updates it, and returns it. Ideal for scenarios where you need to retrieve a document in its old or new state immediately after a change (e.g., for counters).
 
-*   **Параметры:**
-    *   `filter {object}`: Фильтр для поиска.
-    *   `update {object}`: Объект с операторами обновления.
-    *   `options.returnOriginal {boolean}`: Если `false` (по умолчанию), возвращает документ **после** обновления. Если `true`, возвращает документ **до** обновления.
-*   **Возвращает:** `Promise<object | null>` - Документ (до или после обновления) или `null`, если ничего не найдено.
+* **Parameters:**
+* `filter {object}`: Filter to search for.
+* `update {object}`: Object with update operators.
+* `options.returnOriginal {boolean}`: If `false` (default), returns the document **after** the update. If `true`, returns the document **before** the update.
+* **Returns:** `Promise<object | null>` - The document (before or after the update) or `null` if nothing was found.
 
-**Пример:**
+**Example:**
 
 ```javascript
-// Зарезервировать один товар и вернуть его состояние *до* резервации
-const filter = { name: 'Ноутбук', stock: { $gt: 0 } };
+// Reserve one item and return its state *before* the reservation
+const filter = { name: 'Laptop', stock: { $gt: 0 } };
 const update = { $inc: { stock: -1 } };
 const options = { returnOriginal: true };
 
 const originalProductState = await productsCollection.findOneAndUpdate(filter, update, options);
 
 if (originalProductState) {
-  console.log(`Товар успешно зарезервирован. Остаток на складе был: ${originalProductState.stock}`);
+console.log(`Product successfully reserved. Stock balance was: ${originalProductState.stock}`);
 }
 ```
 
-## Удаление Документов (Delete)
+## Deleting Documents (Delete)
 
-### Как удалить один документ по ID (`remove`)
+### How to delete a single document by ID (`remove`)
 
-Метод `collection.remove(id)` удаляет один документ из коллекции по его `_id`.
+The `collection.remove(id)` method deletes a single document from the collection by its `_id`.
 
-*   **Параметры:**
-    *   `id {string}`: Уникальный `_id` документа для удаления.
-*   **Возвращает:** `Promise<boolean>` - `true`, если документ был найден и удален, иначе `false`.
+* **Parameters:**
+* `id {string}`: The unique `_id` of the document to delete.
+* **Returns:** `Promise<boolean>` - `true` if the document was found and removed, otherwise `false`.
 
-**Пример:**
+**Example:**
 
 ```javascript
 const wasRemoved = await itemsCollection.remove('some-item-id');
-console.log(`Документ был удален: ${wasRemoved}`);
+console.log(`The document was removed: ${wasRemoved}`);
 ```
 
-### Продвинутое удаление с фильтрами
+### Advanced deletion with filters
 
-#### Удаление одного документа по фильтру (`deleteOne`)
+#### Deleting a single document by filter (`deleteOne`)
 
-Метод `collection.deleteOne(filter)` удаляет **первый** документ, соответствующий `filter`.
+The `collection.deleteOne(filter)` method deletes the **first** document matching `filter`.
 
-*   **Параметры:**
-    *   `filter {object}`: Фильтр для поиска документа на удаление.
-*   **Возвращает:** `Promise<{ deletedCount: number }>` - Объект, где `deletedCount` равен 0 или 1.
+* **Parameters:**
+* `filter {object}`: Filter for finding the document to delete.
+* **Returns:** `Promise<{ deletedCount: number }>` - An object where `deletedCount` is 0 or 1.
 
-**Пример:**
+**Example:**
 
 ```javascript
-// Удалить один неактивный лог
+// Delete one inactive log
 const result = await logsCollection.deleteOne({ level: 'debug', processed: true });
-console.log(`Удалено логов: ${result.deletedCount}`);
+console.log(`Logs deleted: ${result.deletedCount}`);
 ```
 
-#### Удаление нескольких документов по фильтру (`deleteMany`)
+#### Deleting multiple documents by filter (`deleteMany`)
 
-Метод `collection.deleteMany(filter)` удаляет **все** документы, соответствующие `filter`.
+The `collection.deleteMany(filter)` method deletes **all** documents matching `filter`.
 
-*   **Параметры:**
-    *   `filter {object}`: Фильтр для поиска документов на удаление.
-*   **Возвращает:** `Promise<{ deletedCount: number }>` - Объект с количеством удаленных документов.
+* **Parameters:**
+* `filter {object}`: Filter for finding documents to delete.
+* **Returns:** `Promise<{ deletedCount: number }>` - An object with the number of deleted documents.
 
-**Пример:**
+**Example:**
 
 ```javascript
-// Удалить все сессии пользователя, которые истекли
+// Delete all expired user sessions
 const filter = {
-  userId: 'user-123',
-  expiresAt: { $lt: new Date().toISOString() }
+userId: 'user-123',
+expiresAt: { $lt: new Date().toISOString() }
 };
 
 const result = await sessionsCollection.deleteMany(filter);
-console.log(`Удалено устаревших сессий: ${result.deletedCount}`);
+console.log(`Expired sessions deleted: ${result.deletedCount}`);
 ```
 
-### Как удалить все документы из коллекции (`clear`)
+### How to clear all documents from a collection
 
-Метод `collection.clear()` удаляет **все** документы из коллекции. Используйте с осторожностью.
+The `collection.clear()` method removes **all** documents from the collection. Use with caution.
 
-*   **Параметры:** Нет.
-*   **Возвращает:** `Promise<boolean>` - Промис, который разрешается `true` при успешной очистке.
+* **Parameters:** None.
+* **Returns:** `Promise<boolean>` - A promise that resolves to `true` upon successful clearing.
 
-**Пример:**
+**Example:**
 
 ```javascript
 const clearResult = await logsCollection.clear();
-console.log(`Результат очистки коллекции: ${clearResult}`);
+console.log(`Result of clearing the collection: ${clearResult}`);
 ```
 
-## Подсчет Документов (`count`)
+## Counting Documents (`count`)
 
-Метод `collection.count()` возвращает количество "живых" (не истекших по TTL) документов в коллекции.
+The `collection.count()` method returns the number of live (not expired by TTL) documents in the collection.
 
-*   **Параметры:** Нет.
-*   **Возвращает:** `Promise<number>` - Промис, который разрешается числом документов.
+* **Parameters:** None.
+* **Returns:** `Promise<number>` - A promise that resolves to a number of documents.
 
-**Пример:**
+**Example:**
 
 ```javascript
 const totalUsers = await usersCollection.count();
-console.log(`Всего пользователей в системе: ${totalUsers}`);
+console.log(`Total users in the system: ${totalUsers}`);
 ```
-В следующем разделе мы подробно рассмотрим, как эффективно искать и фильтровать документы с помощью `find`, `findOne` и индексов.
+In the next section, we'll take a detailed look at how to effectively search and filter documents using `find`, `findOne`, and indexes.

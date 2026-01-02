@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <title>WiseJSON Data Explorer</title>
-    <!-- +++ НОВОЕ: Указываем иконку для вкладки браузера +++ -->
     <link rel="icon" type="image/png" href="/favicon.ico">
     <link rel="stylesheet" href="/static/styles.css">
 </head>
@@ -18,7 +17,7 @@
             <h2>Database Map</h2>
             <db-map id="dbMap"></db-map>
         </section>
-        
+
         <hr>
 
         <section class="controls-grid">
@@ -27,22 +26,26 @@
                 <select id="collectionSelect"></select>
                 <button id="refreshBtn">Refresh</button>
             </div>
+
             <div class="control-group" id="query-builder-container">
                 <label>Filter:</label>
                 <query-builder id="queryBuilder"></query-builder>
             </div>
+
              <div class="control-group">
                 <label for="sortInput">Sort by Field:</label>
-                <input type="text" id="sortInput" placeholder="age">
+                <input type="text" id="sortInput" placeholder="e.g., _id">
                 <select id="orderSelect">
                     <option value="asc">ASC</option>
                     <option value="desc">DESC</option>
                 </select>
             </div>
+
             <div class="control-group">
                 <label for="pageSizeInput">Rows per page:</label>
                 <input type="number" id="pageSizeInput" min="1" value="10">
             </div>
+
             <button id="applyBtn" class="apply-button">Apply Filters & Load</button>
         </section>
 
@@ -64,8 +67,8 @@
         <section id="index-manager">
             <h2>Index Management</h2>
             <div id="index-list">
-                <!-- Список индексов будет здесь -->
-            </div>
+                </div>
+
             <div id="create-index-form" class="controls-grid write-op" style="display: none;">
                 <div class="control-group">
                      <label for="indexFieldInput">Field Name:</label>
@@ -80,17 +83,17 @@
         </section>
 
         <hr>
-        
+
         <section id="viewer">
             <h3>Document Viewer</h3>
             <json-viewer id="documentViewer"></json-viewer>
         </section>
     </main>
 
-    <!-- Подключаем скрипты компонентов -->
     <script src="/static/components/db-map.js"></script>
     <script src="/static/components/query-builder.js"></script>
     <script src="/static/components/json-viewer.js"></script>
+
     <script src="/static/script.js"></script>
 </body>
 </html>

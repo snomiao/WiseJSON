@@ -1,184 +1,184 @@
-# 04 - Расширенные Возможности и Конфигурация
+# 04 - Advanced Features and Configuration
 
-В этом разделе рассматриваются дополнительные возможности WiseJSON DB, которые позволяют тонко настроить поведение базы данных, управлять данными через командную строку (CLI) и выполнять операции импорта/экспорта.
+This section covers advanced WiseJSON DB features that allow you to fine-tune database behavior, manage data via the command line (CLI), and perform import/export operations.
 
-## Конфигурация Экземпляра `WiseJSON`
+## Configuring a WiseJSON Instance
 
-При создании нового экземпляра `WiseJSON` вы можете передать второй аргумент — объект с опциями конфигурации, чтобы адаптировать базу данных под нужды вашего приложения.
+When creating a new WiseJSON instance, you can pass a second argument—an object with configuration options—to tailor the database to your application's needs.
 
-**Синтаксис:**
+**Syntax:**
 `const db = new WiseJSON(dbPath, options);`
 
-### Основные доступные опции:
+### Main available options:
 
-*   **`ttlCleanupIntervalMs {number}`**
-    *   **Описание:** Интервал в миллисекундах, с которым база данных будет автоматически проверять и удалять документы с истекшим сроком жизни (TTL).
-    *   **По умолчанию:** `60000` (1 минута).
-    *   **Пример:** `3600000` для проверки раз в час.
+* **`ttlCleanupIntervalMs {number}`**
+* **Description:** The interval in milliseconds at which the database will automatically check and delete documents with expired TTL.
+* **Default:** `60000` (1 minute).
+* **Example:** `3600000` to check once per hour.
 
-*   **`checkpointIntervalMs {number}`**
-    *   **Описание:** Интервал в миллисекундах для автоматического создания чекпоинтов (снапшотов данных). Чекпоинты ускоряют запуск и восстановление.
-    *   **По умолчанию:** `300000` (5 минут).
-    *   **Пример:** `0` чтобы отключить создание чекпоинтов по таймеру.
+* **`checkpointIntervalMs {number}`**
+* **Description:** The interval in milliseconds for automatically creating checkpoints (data snapshots). Checkpoints speed up startup and recovery.
+* **Default:** `300000` (5 minutes).
+* **Example:** `0` to disable timer-based checkpoint creation.
 
-*   **`maxWalEntriesBeforeCheckpoint {number}`**
-    *   **Описание:** Максимальное количество записей в журнале упреждающей записи (WAL), после которого будет принудительно запущен процесс создания чекпоинта, независимо от таймера.
-    *   **По умолчанию:** `1000`.
+* **`maxWalEntriesBeforeCheckpoint {number}`**
+* **Description:** The maximum number of write-ahead log (WAL) entries after which a checkpoint creation process will be forced, regardless of the timer.
+* **Default:** `1000`.
 
-*   **`checkpointsToKeep {number}`**
-    *   **Описание:** Количество последних чекпоинтов, которые будут храниться на диске. Более старые будут автоматически удаляться для экономии места.
-    *   **По умолчанию:** `5`.
-    *   **Минимальное значение:** `1`.
+* **`checkpointsToKeep {number}`**
+* **Description:** The number of recent checkpoints to keep on disk. Older ones will be automatically deleted to save space.
+* **Default:** `5`.
+* **Minimum value:** `1`.
 
-*   **`idGenerator {function}`**
-    *   **Описание:** Пользовательская функция для генерации `_id` документов, если `_id` не предоставлен при вставке. Должна возвращать уникальную строку.
-    *   **По умолчанию:** Функция, генерирующая `uuid v4`.
-    *   **Пример:** `() => \`doc-\${Date.now()}\``
+* **`idGenerator {function}`**
+* **Description:** A user-defined function for generating `_id` for documents if `_id` is not provided during insertion. Should return a unique string.
+* **Default:** A function that generates `uuid v4`.
+* **Example:** ``() => doc-${Date.now()}``
 
-*   **`walReadOptions {object}`**
-    *   **Описание:** Опции для обработки WAL-файлов при запуске, особенно если они повреждены.
-    *   **По умолчанию:** `{ recover: false, strict: false }`. В этом режиме поврежденные строки WAL пропускаются с выводом предупреждения.
-    *   **Опции:**
-        *   `recover: true`: Агрессивно пытаться восстановить данные, пропуская битые строки WAL.
-        *   `strict: true`: Выбрасывать ошибку при первой же ошибке парсинга строки WAL, останавливая инициализацию.
+* **`walReadOptions {object}`**
+* **Description:** Options for processing WAL files at startup, especially if they are corrupted. * **Default:** `{ recover: false, strict: false }`. In this mode, corrupted WAL lines are skipped and a warning is issued.
+  * **Options:**
+    * `recover: true`: Aggressively attempt to recover data, skipping corrupted WAL lines.
+    * `strict: true`: Raise an error at the first WAL line parsing error, stopping initialization.
 
-**Пример использования опций:**
+**Example of using options:**
 
 ```javascript
 const { v4: uuidv4 } = require('uuid');
 
 const dbOptions = {
-  checkpointIntervalMs: 10 * 60 * 1000, // Чекпоинт каждые 10 минут
-  checkpointsToKeep: 3,                 // Хранить 3 последних чекпоинта
-  idGenerator: () => `user-${uuidv4()}`,// Кастомный ID
-  walReadOptions: { recover: true }     // Пытаться восстановить из поврежденного WAL
+checkpointIntervalMs: 10 * 60 * 1000, // Checkpoint every 10 minutes
+checkpointsToKeep: 3, // Keep the last 3 checkpoints
+idGenerator: () => `user-${uuidv4()}`, // Custom ID
+walReadOptions: { recover: true } // Attempt to recover from corrupted WAL
 };
 
 const db = new WiseJSON('/path/to/my-app-db', dbOptions);
 ```
 
-## Импорт и Экспорт Данных (через API)
+## Data Import and Export (via API)
 
-Вы можете легко переносить данные в/из коллекций с помощью встроенных методов.
+You can easily transfer data to and from collections using built-in methods.
 
-*   **`collection.exportJson(filePath)`**: Сохраняет все "живые" документы коллекции в указанный файл в формате JSON (массив объектов).
-    ```javascript
-    await usersCollection.exportJson('./backups/users_backup.json');
-    ```
-*   **`collection.exportCsv(filePath, options)`**: Сохраняет данные в формате CSV. Можно настроить разделители и заголовки.
-    ```javascript
-    await usersCollection.exportCsv('./backups/users_backup.csv');
-    ```
-*   **`collection.importJson(filePath, options)`**: Импортирует документы из JSON-файла.
-    *   `options.mode`:
-        *   `'append'` (по умолчанию): Добавляет документы из файла к существующим в коллекции.
-        *   `'replace'`: **Полностью очищает** коллекцию перед импортом документов из файла.
-    ```javascript
-    // Добавить новых пользователей из файла
-    await usersCollection.importJson('./new_users.json');
+* **`collection.exportJson(filePath)`**: Saves all "live" documents of a collection to the specified file in JSON format (an array of objects).
+```javascript
+await usersCollection.exportJson('./backups/users_backup.json');
+```
+* **`collection.exportCsv(filePath, options)`**: Saves data in CSV format. Separators and headers can be customized.
+```javascript
+await usersCollection.exportCsv('./backups/users_backup.csv');
+```
+* **`collection.importJson(filePath, options)`**: Imports documents from a JSON file.
+  * `options.mode`:
+    * `'append'` (default): Appends documents from a file to existing ones in the collection.
+    * `'replace'`: **Completely clears** the collection before importing documents from a file. 
 
-    // Полностью заменить данные в коллекции
-    await productsCollection.importJson('./full_product_list.json', { mode: 'replace' });
-    ```
+```javascript
+// Add new users from a file
+await usersCollection.importJson('./new_users.json');
 
-## Интерфейс Командной Строки (CLI)
+// Completely replace the data in the collection
+await productsCollection.importJson('./full_product_list.json', { mode: 'replace' });
+```
 
-WiseJSON DB включает мощный инструмент командной строки `wisejson-explorer` для администрирования базы данных без написания кода.
+## Command Line Interface (CLI)
 
-**Важно:**
-*   **Путь к БД:** Укажите путь к вашей базе данных через переменную окружения `WISE_JSON_PATH`.
-*   **Разрешение на запись:** Для выполнения команд, изменяющих данные (`import`, `create-index`, `doc-remove` и др.), необходимо использовать глобальный флаг `--allow-write`.
+WiseJSON DB includes a powerful command-line tool, `wisejson-explorer`, for database administration without writing code.
 
-**Примеры команд:**
+**Important:**
+* **DB Path:** Specify the path to your database using the `WISE_JSON_PATH` environment variable.
+* **Write Permission:** To execute commands that modify data (`import`, `create-index`, `doc-remove`, etc.), you must use the `--allow-write` global flag.
 
-### Команды для чтения и анализа данных
+**Example Commands:**
 
-*   **`list-collections`**: Показать все коллекции и количество документов в них.
-    ```bash
-    wisejson-explorer list-collections
-    ```
-*   **`show-collection <collectionName>`**: Показать документы в коллекции с фильтрацией, сортировкой и пагинацией.
-    ```bash
-    # Показать первые 5 документов из 'users', отсортированных по возрасту (по убыванию)
-    wisejson-explorer show-collection users --limit 5 --sort age --order desc
+### Commands for reading and analyzing data
 
-    # Найти пользователей старше 30 с помощью JSON-фильтра
-    wisejson-explorer show-collection users --filter '{"age":{"$gt":30}}'
-    ```
-*   **`get-document <collectionName> <documentId>`**: Получить один документ по его `_id`.
-*   **`list-indexes <collectionName>`**: Показать список индексов для коллекции.
-*   **`export-collection <collectionName> <filename>`**: Экспортировать коллекцию в файл (JSON по умолчанию, CSV через опцию).
-    ```bash
-    wisejson-explorer export-collection users users_backup.csv --output csv
-    ```
-
-### Команды для управления данными (требуют `--allow-write`)
-
-*   **`doc-insert <collectionName> '<json_string>'`**: Вставить один новый документ. JSON-строку необходимо заключать в кавычки.
-*   **`doc-remove <collectionName> <documentId>`**: Удалить документ по `_id`.
-*   **`import-collection <collectionName> <filename>`**: Импортировать документы из JSON-файла.
-*   **`create-index <collectionName> <fieldName>`**: Создать индекс.
-*   **`drop-index <collectionName> <fieldName>`**: Удалить индекс.
-
-## Data Explorer (Веб-интерфейс)
-
-Для визуального просмотра и управления данными вы можете запустить встроенный веб-интерфейс. Он обладает мощными функциями, включая интерактивную карту схемы данных и визуальный конструктор запросов.
-
-### Запуск Сервера
-
-Запустите сервер одной из команд из корня вашего проекта:
+* **`list-collections`**: Show all collections and the number of documents in them.
 ```bash
-# Если wisejson-explorer установлен глобально или как зависимость
+wisejson-explorer list-collections
+```
+* **`show-collection <collectionName>`**: Show documents in a collection with filtering, sorting, and pagination.
+```bash
+# Show the first 5 documents from 'users', sorted by age (descending)
+wisejson-explorer show-collection users --limit 5 --sort age --order desc
+
+# Find users over 30 using a JSON filter
+wisejson-explorer show-collection users --filter '{"age":{"$gt":30}}'
+```
+* **`get-document <collectionName> <documentId>`**: Get a single document by its `_id`.
+* **`list-indexes <collectionName>`**: Show a list of indexes for a collection.
+* **`export-collection <collectionName> <filename>`**: Export a collection to a file (JSON by default, CSV via option).
+```bash
+wisejson-explorer export-collection users users_backup.csv --output csv
+```
+
+### Commands for data management (require `--allow-write`)
+
+* **`doc-insert <collectionName> '<json_string>'`**: Insert a single new document. The JSON string must be enclosed in quotes.
+* **`doc-remove <collectionName> <documentId>`**: Delete a document by `_id`.
+* **`import-collection <collectionName> <filename>`**: Import documents from a JSON file.
+* **`create-index <collectionName> <fieldName>`**: Create an index.
+* **`drop-index <collectionName> <fieldName>`**: Delete an index.
+
+## Data Explorer (Web Interface)
+
+For visual viewing and management of your data, you can launch the built-in web interface. It has powerful features, including an interactive data schema map and a visual query builder.
+
+### Starting the Server
+
+Start the server with one of the following commands from the root of your project:
+```bash
+# If wisejson-explorer is installed globally or as a dependency
 wisejson-explorer-server
 
-# Или напрямую через Node.js
+# Or directly via Node.js
 node explorer/server.js
 ```
-По умолчанию, интерфейс будет доступен по адресу **http://127.0.0.1:3000**. Вы можете изменить порт через переменную окружения `PORT`.
+By default, the interface will be accessible at **http://127.0.0.1:3000**. You can change the port using the `PORT` environment variable.
 
-### Режимы Работы
+### Operation Modes
 
-Data Explorer может работать в двух режимах для обеспечения безопасности ваших данных.
+Data Explorer can operate in two modes to ensure the security of your data.
 
-#### 1. Режим "Только для чтения" (Read-Only Mode) — По умолчанию
+#### 1. Read-Only Mode — Default
 
-Это самый безопасный режим, используемый по умолчанию. В нем вы можете:
-*   Просматривать интерактивную карту схемы данных.
-*   Просматривать список коллекций и их содержимое.
-*   Использовать мощный визуальный конструктор для фильтрации данных.
-*   Сортировать и просматривать документы постранично.
-*   Просматривать список существующих индексов.
+This is the most secure mode and is used by default. In it, you can:
+* View an interactive map of the data schema.
+* View a list of collections and their contents.
+* Use a powerful visual designer to filter data.
+* Sort and view documents page by page.
+* View a list of existing indexes.
 
-В этом режиме **невозможно** изменить или удалить какие-либо данные.
+In this mode, it is **impossible** to modify or delete any data.
 
-#### 2. Режим Записи (Write-Enabled Mode)
+#### 2. Write-Enabled Mode
 
-Чтобы выполнять операции, изменяющие данные (удаление документов, создание и удаление индексов), необходимо запустить сервер со специальной переменной окружения `WISEJSON_EXPLORER_ALLOW_WRITE=true`.
+To perform operations that modify data (deleting documents, creating and deleting indexes), you must start the server with the special environment variable 'WISEJSON_EXPLORER_ALLOW_WRITE=true'.
 
-**Внимание:** Используйте этот режим с осторожностью, так как изменения, сделанные через интерфейс, необратимы.
+**Caution:** Use this mode with caution, as changes made through the interface are irreversible.
 
-**Как запустить в режиме записи:**
+**How ​​to run in write mode:**
 
-*   **Для Linux или macOS:**
-    ```bash
-    WISEJSON_EXPLORER_ALLOW_WRITE=true node explorer/server.js
-    ```
-*   **Для Windows (в терминале CMD):**
-    ```bash
-    set "WISEJSON_EXPLORER_ALLOW_WRITE=true" && node explorer/server.js
-    ```
-*   **Для Windows (в PowerShell):**
-    ```powershell
-    $env:WISEJSON_EXPLORER_ALLOW_WRITE="true"; node explorer/server.js
-    ```
+* **For Linux or macOS:**
+```bash
+WISEJSON_EXPLORER_ALLOW_WRITE=true node explorer/server.js
+```
+* **For Windows (in the CMD terminal):**
+```bash
+set "WISEJSON_EXPLORER_ALLOW_WRITE=true" && node explorer/server.js
+```
+* **For Windows (in PowerShell):**
+```powershell
+$env:WISEJSON_EXPLORER_ALLOW_WRITE="true"; node explorer/server.js
+```
 
-Когда этот режим активен, в интерфейсе появятся дополнительные элементы управления:
-*   Кнопки **"Delete"** для удаления документов в таблице.
-*   Форма для **создания новых индексов**.
-*   Кнопки **"×"** для **удаления существующих индексов**.
+When this mode is active, additional controls will appear in the interface:
+* **"Delete"** buttons for deleting documents in the table.
+* A form for **creating new indexes**.
+* Use the **"×"** buttons to **delete existing indexes**.
 
-### Защита Доступа
+### Access Protection
 
-Для защиты вашего Data Explorer паролем, используйте переменные окружения `WISEJSON_AUTH_USER` и `WISEJSON_AUTH_PASS` при запуске сервера:
+To password-protect your Data Explorer, use the `WISEJSON_AUTH_USER` and `WISEJSON_AUTH_PASS` environment variables when starting the server:
 ```bash
 WISEJSON_AUTH_USER=admin WISEJSON_AUTH_PASS=mySuperSecretPassword node explorer/server.js
