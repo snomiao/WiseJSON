@@ -1,207 +1,207 @@
-```markdown
 docs/02-querying-and-indexing.md
-# 02 - Запросы к Данным и Индексирование
+# 02 - Data Querying and Indexing
 
-Этот раздел посвящен тому, как извлекать документы из коллекций WiseJSON DB. Мы рассмотрим как базовый поиск по ID, так и мощные запросы с использованием фильтров, операторов и индексов для ускорения операций.
+This section covers how to retrieve documents from WiseJSON DB collections. We'll cover both basic ID searching and powerful queries using filters, operators, and indexes to speed up operations.
 
-**Предполагается, что у вас уже есть инициализированный экземпляр `WiseJSON` и рабочая коллекция, как описано в предыдущих разделах.**
+**This section assumes you already have an initialized `WiseJSON` instance and a working collection, as described in the previous sections.**
 
-## Базовые Методы Чтения
+## Basic Reading Methods
 
-### Как получить документ по его ID (`getById`)
+### Getting a document by its ID (`getById`)
 
-Это самый быстрый и прямой способ получить один конкретный документ, если вы знаете его уникальный идентификатор `_id`.
+This is the fastest and most direct way to retrieve a single document if you know its unique `_id`.
 
-*   **Параметры:**
-    *   `id {string}`: Уникальный `_id` искомого документа.
-*   **Возвращает:** `Promise<object | null>` - Промис, который разрешается объектом найденного документа. Если документ с таким `id` не существует или его срок жизни (TTL) истек, промис разрешается значением `null`.
+* **Parameters:**
+* `id {string}`: The unique `_id` of the document to retrieve.
+* **Returns:** `Promise<object | null>` - A promise that resolves to the found document object. If a document with the specified `id` doesn't exist or its TTL has expired, the promise resolves to `null`.
 
-**Пример:**
+**Example:**
 
 ```javascript
 const article = await articlesCollection.getById('article-123');
 if (article) {
-  console.log('Найдена статья:', article);
+console.log('Article found:', article);
 } else {
-  console.log('Статья с ID "article-123" не найдена.');
+console.log('Article with ID "article-123" not found.');
 }
 ```
 
-### Как получить все документы из коллекции (`getAll`)
+### How to get all documents from a collection (`getAll`)
 
-Метод `collection.getAll()` извлекает все "живые" (не истекшие по TTL) документы из коллекции.
+The `collection.getAll()` method retrieves all "live" (not expired by TTL) documents from the collection.
 
-*   **Внимание:** Используйте этот метод с осторожностью на очень больших коллекциях, так как он загружает все документы в оперативную память.
-*   **Параметры:** Нет.
-*   **Возвращает:** `Promise<Array<object>>` - Промис, который разрешается массивом всех найденных документов.
+* **Warning:** Use this method with caution on very large collections, as it loads all documents into memory.
+* **Parameters:** None.
+* **Returns:** `Promise<Array<object>>` - A promise that resolves to an array of all found documents.
 
-**Пример:**
+**Example:**
 
 ```javascript
 const allTasks = await tasksCollection.getAll();
-console.log(`Всего найдено ${allTasks.length} задач.`);
+console.log(`${allTasks.length} tasks found.`);
 ```
 
-## Продвинутые Запросы с `find` и `findOne`
+## Advanced Queries with `find` and `findOne`
 
-Для гибкого поиска по различным критериям WiseJSON DB предоставляет методы `find` и `findOne`, которые поддерживают мощный синтаксис запросов, аналогичный MongoDB.
+For flexible searching by various criteria, WiseJSON DB provides the `find` and `findOne` methods, which support a powerful query syntax similar to MongoDB.
 
-### Поиск нескольких документов по условию (`find`)
+### Searching for Multiple Documents by Condition (`find`)
 
-Метод `collection.find(query, projection)` позволяет найти все документы, которые удовлетворяют заданному фильтру.
+The `collection.find(query, projection)` method finds all documents that match a given filter.
 
-*   **Параметры:**
-    *   `query {object}`: Объект-фильтр, описывающий условия поиска. Это основной и рекомендуемый способ.
-    *   `projection {object}` (необязательно): Объект, указывающий, какие поля следует включить или исключить из результирующих документов (см. ниже).
-*   **Возвращает:** `Promise<Array<object>>` - Промис, который разрешается массивом документов, соответствующих запросу.
+* **Parameters:**
+* `query {object}`: A filter object describing the search conditions. This is the basic and recommended method.
+* `projection {object}` (optional): An object specifying which fields to include or exclude from the resulting documents (see below).
+* **Returns:** `Promise<Array<object>>` - A promise that resolves to an array of documents matching the query.
 
-#### Синтаксис Запросов (Query Syntax)
+#### Query Syntax
 
-Объект-фильтр состоит из пар `поле: значение` для точного совпадения или использует специальные операторы для более сложных условий.
+A filter object consists of `field: value` pairs for exact matching or uses special operators for more complex conditions.
 
-**Операторы сравнения:**
-*   `$eq`: равно (обычно опускается, ` { age: 30 } ` эквивалентно ` { age: { $eq: 30 } } `)
-*   `$ne`: не равно (`!=`)
-*   `$gt`: больше чем (`>`)
-*   `$gte`: больше или равно (`>=`)
-*   `$lt`: меньше чем (`<`)
-*   `$lte`: меньше или равно (`<=`)
-*   `$in`: значение поля находится в указанном массиве
-*   `$nin`: значение поля не находится в указанном массиве
+**Comparison Operators:**
+* `$eq`: equal to (usually omitted, ` { age: 30 } ` is equivalent to ` { age: { $eq: 30 } } `)
+* `$ne`: not equal to (`!=`)
+* `$gt`: greater than (`>`)
+* `$gte`: greater than or equal to (`>=`)
+* `$lt`: less than (`<`)
+* `$lte`: less than or equal to (`<=`)
+* `$in`: the field value is in the specified array
+* `$nin`: the field value is not in the specified array
 
-**Логические операторы:**
-*   `$or`: соответствует любому из условий в массиве. ` { $or: [ { <условие1> }, { <условие2> } ] } `
-*   `$and`: соответствует всем условиям в массиве. Обычно неявно, но полезен для сложных группировок.
+**Logical Operators:**
+* `$or`: matches any of the conditions in the array. ` { $or: [ { <condition1> }, { <condition2> } ] } `
+* `$and`: matches all conditions in the array. Usually implicit, but useful for complex groupings.
 
-**Операторы элементов:**
-*   `$exists`: поле существует (`true`) или не существует (`false`).
+**Element Operators:**
+* `$exists`: whether the field exists (`true`) or does not exist (`false`).
 
-**Пример 1: Простой фильтр**
-Найти всех пользователей из города 'Москва'.
+**Example 1: Simple Filter**
+Find all users from the city 'Moscow'.
 ```javascript
-const moscowUsers = await usersCollection.find({ city: 'Москва' });
+const moscowUsers = await usersCollection.find({ city: 'Moscow' });
 ```
 
-**Пример 2: Использование операторов сравнения**
-Найти всех пользователей старше 30 лет, но младше 40.
+**Example 2: Using Comparison Operators**
+Find all users over 30 but under 40.
 ```javascript
 const usersInTheir30s = await usersCollection.find({
-  age: { $gt: 30, $lt: 40 }
+age: { $gt: 30, $lt: 40 }
 });
 ```
 
-**Пример 3: Использование оператора `$in`**
-Найти товары из категорий 'Электроника' или 'Книги'.
+**Example 3: Using the `$in` Operator**
+Find products from the 'Electronics' or 'Books' categories.
 ```javascript
 const desiredProducts = await productsCollection.find({
-  category: { $in: ['Электроника', 'Книги'] }
+category: { $in: ['Electronics', 'Books'] }
 });
 ```
 
-**Пример 4: Сложный запрос с логикой `$or`**
-Найти всех активных пользователей из Нью-Йорка ИЛИ всех пользователей с тегом 'vip'.
+**Example 4: Complex query with `$or` logic**
+Find all active users from New York OR all users with the tag 'vip'.
 ```javascript
 const query = {
-  $or: [
-    { city: 'New York', status: 'active' }, // Условие 1
-    { tags: 'vip' } // Условие 2 (для полей-массивов простое совпадение работает как "содержит")
-  ]
+$or: [
+{ city: 'New York', status: 'active' }, // Condition 1
+{ tags: 'vip' } // Condition 2 (for array fields, a simple match works like "contains")
+]
 };
 const results = await usersCollection.find(query);
 ```
 
-### Поиск одного документа по условию (`findOne`)
+### Find a single document by condition (`findOne`)
 
-Работает аналогично `find`, но возвращает только **первый** найденный документ, удовлетворяющий условию, или `null`. Это более эффективно, если вам нужен только один результат или вы проверяете наличие документа.
+Works similar to `find`, but returns only the first document found that satisfies the condition, or `null`. This is more efficient if you only need one result or are checking for the existence of a document.
 
-*   **Параметры и Возвращаемое значение:** Аналогичны `find`, но возвращает `Promise<object | null>`.
+* **Parameters and Return Value:** Similar to `find`, but returns a `Promise<object | null>`.
 
-**Пример:**
-Найти одного пользователя с email 'admin@example.com'.
+**Example:**
+Find a single user with the email address 'admin@example.com'.
 ```javascript
 const adminUser = await usersCollection.findOne({ email: 'admin@example.com' });
 if (adminUser) {
-  console.log('Администратор найден:', adminUser);
+console.log('Administrator found:', adminUser);
 }
 ```
 
-### Проекции: Выборка нужных полей
+### Projections: Selecting the Right Fields
 
-Иногда вам не нужны все поля документа, а только некоторые из них. Проекции позволяют указать, какие поля **включить** или **исключить** из результата. Это уменьшает объем передаваемых данных и может повысить производительность.
+Sometimes you don't need all the fields in a document, but only some of them. Projections allow you to specify which fields to include or exclude from the result. This reduces the amount of data transferred and can improve performance.
 
-Проекции передаются вторым аргументом в `find` и `findOne`.
-*   `{ field: 1 }`: Включить поле `field`.
-*   `{ field: 0 }`: Исключить поле `field`.
+Projections are passed as the second argument to `find` and `findOne`.
+* `{ field: 1 }`: Include the field `field`.
+* `{ field: 0 }`: Exclude the field `field`.
 
-**Правила:**
-1.  Вы не можете смешивать режимы включения и исключения в одном объекте проекции (кроме особого случая с исключением `_id`).
-2.  Поле `_id` включается по умолчанию. Чтобы его исключить, нужно явно указать `{ _id: 0 }`.
+**Rules:**
+1. You cannot mix inclusion and exclusion modes in a single projection object (except for the special case of excluding `_id`).
+2. The `_id` field is included by default. To exclude it, you must explicitly specify `{ _id: 0 }`.
 
-**Пример 1: Включение конкретных полей**
-Получить только имена и email всех пользователей, оставив `_id` по умолчанию.
+**Example 1: Including Specific Fields**
+Get only the names and email addresses of all users, leaving `_id` as the default.
 ```javascript
 const userList = await usersCollection.find({}, { name: 1, email: 1 });
-// Результат: [{ _id: '...', name: '...', email: '...' }, ...]
+// Result: [{ _id: '...', name: '...', email: '...' }, ...]
 ```
 
-**Пример 2: Включение полей с исключением `_id`**
+**Example 2: Including fields but excluding `_id`**
+
 ```javascript
 const userListNoId = await usersCollection.find({}, { name: 1, email: 1, _id: 0 });
-// Результат: [{ name: '...', email: '...' }, ...]
+// Result: [{ name: '...', email: '...' }, ...]
 ```
 
-**Пример 3: Исключение полей**
-Получить все данные о пользователях, кроме их детальной истории и тегов.
+**Example 3: Excluding fields**
+Get all user data except their detailed history and tags. 
 ```javascript
 const usersWithoutHistory = await usersCollection.find({}, { history: 0, tags: 0 });
 ```
 
-## Ускорение Поиска с Помощью Индексов
+## Speeding Up Search with Indexes
 
-Индексы — это специальные структуры данных, которые позволяют базе данных находить документы гораздо быстрее, не перебирая всю коллекцию. WiseJSON DB **автоматически использует существующие индексы**, если поле в запросе проиндексировано и используется для поиска по точному совпадению (`{ field: 'value' }`) или с операторами диапазона (`$gt`, `$lt` и т.д.).
+Indexes are special data structures that allow the database to find documents much faster without iterating through the entire collection. WiseJSON DB **automatically uses existing indexes** if a field in the query is indexed and used for exact match search (`{ field: 'value' }`) or with range operators (`$gt`, `$lt`, etc.).
 
-### Как создать индекс (`createIndex`)
+### How to Create an Index (`createIndex`)
 
-Метод `collection.createIndex(fieldName, options)` создает индекс для указанного поля.
+The `collection.createIndex(fieldName, options)` method creates an index for the specified field.
 
-*   **Параметры:**
-    *   `fieldName {string}`: Имя индексируемого поля.
-    *   `options {object}` (необязательно):
-        *   `unique {boolean}`: Если `true`, индекс будет уникальным. Это гарантирует, что не будет двух документов с одинаковым значением в этом поле. Попытка вставить дубликат вызовет ошибку. По умолчанию `false`.
+* **Parameters:**
+* `fieldName {string}`: The name of the field to index.
+* `options {object}` (optional):
+* `unique {boolean}`: If `true`, the index will be unique. This ensures that no two documents have the same value in this field. Attempting to insert a duplicate will result in an error. Defaults to `false`.
 
-**Пример:**
+**Example:**
 ```javascript
-// Создаем стандартный (неуникальный) индекс по полю 'city' для быстрого поиска по городам
+// Create a standard (non-unique) index on the 'city' field for fast city searching
 await customersCollection.createIndex('city');
 
-// Создаем уникальный индекс по полю 'email', чтобы не было двух пользователей с одинаковым email
+// Create a unique index on the 'email' field to ensure that no two users have the same email
 await customersCollection.createIndex('email', { unique: true });
 ```
 
-### Управление индексами
+### Managing Indexes
 
-*   **`collection.getIndexes()`**: Возвращает массив объектов, описывающих все существующие индексы в коллекции.
-    ```javascript
-    const indexes = await customersCollection.getIndexes();
-    // Пример вывода: [{ fieldName: 'city', type: 'standard' }, { fieldName: 'email', type: 'unique' }]
-    console.log('Текущие индексы:', indexes);
-    ```
-*   **`collection.dropIndex(fieldName)`**: Удаляет индекс с указанного поля.
-    ```javascript
-    await customersCollection.dropIndex('city');
-    console.log('Индекс по полю "city" удален.');
-    ```
-
-### Методы поиска по индексу (для обратной совместимости)
-
-Хотя современный метод `find` автоматически использует индексы, для обратной совместимости и в некоторых случаях для явного указания поиска по индексу сохранены следующие методы. Они могут быть менее гибкими, чем `find`.
-
-*   **`collection.findByIndexedValue(fieldName, value)`**: Находит все документы с точным значением `value` в индексированном поле `fieldName`. Это эквивалентно `find({ [fieldName]: value })`.
-*   **`collection.findOneByIndexedValue(fieldName, value)`**: Находит один документ. Эквивалент `findOne({ [fieldName]: value })`.
-
-**Пример:**
+* **`collection.getIndexes()`**: Returns an array of objects describing all existing indexes in the collection. 
 ```javascript
-// Эти два вызова дадут одинаковый результат, но `find` более универсален.
-const usersFromSpb_legacy = await usersCollection.findByIndexedValue('city', 'Санкт-Петербург');
-const usersFromSpb_modern = await usersCollection.find({ city: 'Санкт-Петербург' });
+const indexes = await customersCollection.getIndexes();
+// Sample output: [{ fieldName: 'city', type: 'standard' }, { fieldName: 'email', type: 'unique' }]
+console.log('Current indexes:', indexes);
+```
+* **`collection.dropIndex(fieldName)`**: Removes an index from the specified field.
+```javascript
+await customersCollection.dropIndex('city');
+console.log('The index on the "city" field has been removed.');
+```
+
+### Index Search Methods (for Backward Compatibility)
+
+While the modern `find` method automatically uses indexes, the following methods are retained for backward compatibility and, in some cases, for explicitly specifying index searches. They may be less flexible than `find`.
+
+* **`collection.findByIndexedValue(fieldName, value)`**: Finds all documents with the exact value `value` in the indexed field `fieldName`. This is equivalent to `find({ [fieldName]: value })`.
+* **`collection.findOneByIndexedValue(fieldName, value)`**: Finds a single document. This is equivalent to `findOne({ [fieldName]: value })`.
+
+**Example:**
+```javascript
+// These two calls will produce the same result, but `find` is more versatile.
+const usersFromSpb_legacy = await usersCollection.findByIndexedValue('city', 'Saint Petersburg');
+const usersFromSpb_modern = await usersCollection.find({ city: 'Saint Petersburg' });
 ```

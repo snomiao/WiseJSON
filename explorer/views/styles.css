@@ -109,7 +109,7 @@ button.delete-btn:hover {
 }
 
 .apply-button {
-    grid-column: 1 / -1; /* Растягиваем на всю ширину грида */
+    grid-column: 1 / -1; /* Stretch to the full width of the grid */
     margin-top: 10px;
     background-color: #0366d6;
 }
@@ -206,7 +206,7 @@ hr {
     color: #24292e;
 }
 
-/* Стили для элементов, требующих права на запись */
+/* Styles for elements that require write access */
 .write-op {
-    /* по умолчанию скрыты, будут показаны через JS */
+/* hidden by default, will be shown via JS */
 }

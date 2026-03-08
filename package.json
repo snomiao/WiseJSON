@@ -2,16 +2,9 @@
   "name": "wise-json-db",
   "version": "6.0.4",
   "description": "Blazing fast, crash-proof embedded JSON database for Node.js with batch operations, TTL, indexes, and segmented checkpointing.",
-  "main": "wise-json/index.js",
-  "type": "commonjs",
-  "scripts": {
-    "test": "node test/run-all-tests.js",
-    "start-explorer": "node explorer/server.js"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Xzdes/WiseJSON.git"
-  },
+  "type": "module",
+  "main": "./dist/lib/index.js",
+  "types": "./dist/lib/index.d.ts",
   "keywords": [
     "json",
     "database",
@@ -42,6 +35,17 @@
     "javascript",
     "npm"
   ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/explorer/server.ts",
+    "test": "tsx test/run-all-tests.ts",
+    "lint": "eslint src/**/*.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Xzdes/WiseJSON.git"
+  },
   "author": "Xzdes <xzdes@yandex.ru>",
   "license": "MIT",
   "bugs": {
@@ -62,8 +66,19 @@
   "bin": {
     "wise-json": "cli/index.js"
   },
+  "exports": {
+    ".": "./dist/lib/index.js",
+    "./cli": "./dist/cli/index.js"
+  },
   "dependencies": {
-    "proper-lockfile": "^4.1.2",
-    "uuid": "^11.1.0"
+    "proper-lockfile": "4.1.2",
+    "uuid": "11.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/proper-lockfile": "^4.1.4",
+    "eslint": "^8.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
   }
 }
